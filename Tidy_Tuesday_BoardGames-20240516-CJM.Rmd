@@ -1,0 +1,54 @@
+---
+title: "Tidy Tuesday Board Games"
+output: html_document
+date: "2024-06-12"
+---
+
+# Installing Necessary Packages
+```{r}
+library(tidyverse)
+library(formattable)
+library(stringr)
+```
+
+# Data Loading
+```{r}
+ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/ratings.csv')
+details <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/details.csv')
+```
+
+# Data Cleaning
+```{r, warning = FALSE}
+games <- left_join(details, ratings, by = c("id"= "id")) %>% #combining details and ratings tables
+  filter(yearpublished > 0) %>% #filtering out nonsensical publish dates
+  filter(users_rated >= 500) #filtering to games with at least 100 ratings so that the ratings are reflective of more people
+
+#table for top rated word games by year
+top_rated_games <- games %>%
+  filter(grepl('Word Game', boardgamecategory)) %>% #filtering to only word games
+  group_by(year) %>%
+  slice(which.max(average)) %>% #getting top word game per year by average rating
+  mutate(`Can be 2 Player` = ifelse(minplayers == 2, "Y", ifelse(minplayers == 1 & maxplayers > 1, "Y", "N"))) %>% #creating column for if it can be a two player game
+  separate_wider_delim(boardgamecategory, delim = "'Word Game'", names = c("Subcategory", "Word"), too_few = "align_start") %>%
+  mutate(Subcategory = str_sub(Subcategory, 2, -3)) %>% #cleaning up Subcategory column by removing the [ in front and the , at the end of the column values
+  mutate(across(Subcategory,str_replace_all,'"', '')) %>% #removing quotations around "Children's Game" subcategory
+  select(`Top Word Game of the Year` = primary, #selecting and renaming final column set
+         Subcategory,
+         `Year Published` = year,
+         `Can be 2 Player`,
+         `Playing Time` = playingtime,
+         `Average Rating` = average
+         )
+```
+
+# Formatting the table
+```{r}
+formattable(top_rated_games,
+            align = c("l", rep("c", NCOL(top_rated_games)-1)), #right-aligning first column and center-aligning the remaining columns
+            list(`Playing Time` = color_bar("lightblue"),#creating data bars corresponding to length of playing time
+                  `Top Word Game of the Year` = formatter("span", style = ~ style(color = "purple", font.weight = "bold")), #formatting first column values to be bold and purple
+                 area(col = 6) ~ color_tile("#DFFBE7", "#14C94A") #shading the rating column based on rating
+                 )
+            )
+```
+
